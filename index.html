@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Anurag ❤️ Priya</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-pink-50 min-h-screen flex items-center justify-center p-4">
+  <div id="app" class="w-full max-w-md bg-white rounded-3xl shadow-xl p-6"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, query, orderBy,
+  onSnapshot, getDocs, deleteDoc, doc,
+  where, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDaN4GKniHYpqtfqVd49PbtSBDv81Ar6VA",
+  authDomain: "couple-chat-98128.firebaseapp.com",
+  projectId: "couple-chat-98128",
+  storageBucket: "couple-chat-98128.firebasestorage.app",
+  messagingSenderId: "802286762049",
+  appId: "1:802286762049:web:8f6f441e7c2630deea6ec0"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+const USERS = ["Anurag", "Priyabetu"];
+const PASSWORD = "betupriya";
+const DAY_MS = 24*60*60*1000;
+
+let currentUser = "";
+let loggedIn = false;
+
+async function cleanupOldMessages() {
+  const cutoff = Date.now() - DAY_MS;
+  const q = query(collection(db, "messages"), where("createdAt", "<", cutoff));
+  const snap = await getDocs(q);
+  for (const d of snap.docs) await deleteDoc(d.ref);
+}
+
+function mediaHtml(m){
+  if(!m.fileUrl) return "";
+  if(m.type==="image") return `<img src="${m.fileUrl}" class="mt-2 rounded-xl max-h-40">`;
+  if(m.type==="video") return `<video controls class="mt-2 rounded-xl max-h-40"><source src="${m.fileUrl}"></video>`;
+  return `<audio controls class="mt-2"><source src="${m.fileUrl}"></audio>`;
+}
+
+function render(messages=[], typingText=""){
+  const root=document.getElementById("app");
+
+  if(!loggedIn){
+    root.innerHTML=`
+      <h1 class="text-3xl font-bold text-center text-pink-600 mb-6">Anurag ❤️ Priya</h1>
+      <input id="name" class="w-full border p-3 rounded-xl mb-3" placeholder="Anurag or Priyabetu">
+      <input id="pass" type="password" class="w-full border p-3 rounded-xl mb-3" placeholder="Password">
+      <button id="login" type="button" class="w-full bg-pink-500 text-white p-3 rounded-xl">Enter</button>
+    `;
+    document.getElementById("login").onclick = login;
+    return;
+  }
+
+  root.innerHTML=`
+    <h1 class="text-2xl font-bold text-pink-600 mb-2">💕 ${currentUser}</h1>
+    <div class="text-sm text-gray-500 h-5 mb-2">${typingText}</div>
+
+    <div class="h-72 overflow-y-auto border rounded-xl p-3 mb-3 bg-pink-50">
+      ${messages.map(m=>`
+        <div class="mb-3">
+          <b>${m.user}:</b> ${m.text||""}
+          ${mediaHtml(m)}
+          <button onclick="window.delMsg('${m.id}')" class="text-red-500 text-xs ml-2">Delete</button>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="flex gap-2 mb-2">
+      <input id="msg" class="flex-1 border p-3 rounded-xl" placeholder="Type message...">
+      <button id="send" type="button" class="bg-pink-500 text-white px-4 rounded-xl">Send</button>
+    </div>
+
+    <input id="file" type="file" accept="image/*,video/*,audio/*" class="mb-2 w-full">
+    <button id="upload" type="button" class="w-full bg-purple-500 text-white p-3 rounded-xl">Upload Pic/Video/Voice</button>
+  `;
+
+  document.getElementById("send").onclick = sendMsg;
+  document.getElementById("upload").onclick = uploadFile;
+
+  const msgInput = document.getElementById("msg");
+  msgInput.oninput = async () => {
+    await setDoc(doc(db, "typing", "status"), {
+      user: currentUser,
+      typing: msgInput.value.length > 0
+    });
+  };
+}
+
+async function login(){
+  const n=document.getElementById("name").value.trim();
+  const p=document.getElementById("pass").value;
+
+  if(USERS.includes(n) && p===PASSWORD){
+    currentUser=n;
+    loggedIn=true;
+    await cleanupOldMessages();
+
+    const mq=query(collection(db,"messages"), orderBy("createdAt"));
+    let msgs=[]; let typingText="";
+
+    onSnapshot(mq, snap=>{
+      msgs=snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(m=>m.createdAt >= Date.now()-DAY_MS);
+      render(msgs, typingText);
+    });
+
+    onSnapshot(doc(db,"typing","status"), snap=>{
+      const t=snap.data();
+      typingText = (t && t.typing && t.user !== currentUser)
+        ? `${t.user} is typing...`
+        : "";
+      render(msgs, typingText);
+    });
+
+  } else {
+    alert("Wrong username or password");
+  }
+}
+
+async function sendMsg(){
+  const input=document.getElementById("msg");
+  const text=input.value.trim();
+  if(!text) return;
+
+  await addDoc(collection(db,"messages"), {
+    user: currentUser,
+    text,
+    createdAt: Date.now()
+  });
+
+  input.value="";
+  await setDoc(doc(db,"typing","status"), { user: currentUser, typing:false });
+}
+
+async function uploadFile(){
+  const file=document.getElementById("file").files[0];
+  if(!file) return alert("Select a file");
+
+  const fileRef=ref(storage,"uploads/"+Date.now()+"_"+file.name);
+  await uploadBytes(fileRef,file);
+  const url=await getDownloadURL(fileRef);
+
+  let type="audio";
+  if(file.type.startsWith("image")) type="image";
+  else if(file.type.startsWith("video")) type="video";
+
+  await addDoc(collection(db,"messages"), {
+    user: currentUser,
+    fileUrl:url,
+    type,
+    createdAt: Date.now()
+  });
+
+  alert("Uploaded!");
+}
+
+window.delMsg = async(id)=>{
+  await deleteDoc(doc(db,"messages",id));
+};
+
+render();
+</script>
+</body>
+</html>
