@@ -41,8 +41,8 @@ let allMessages = [];
 let typingText = "";
 
 function render() {
+  const currentDraft = document.getElementById("msg")?.value || "";
   const appDiv = document.getElementById("app");
-
   if (!loggedIn) {
     appDiv.innerHTML = `
       <h1 class="text-3xl font-bold text-center text-pink-600 mb-6">Anurag ❤️ Priya</h1>
@@ -73,7 +73,7 @@ function render() {
     </div>
 
     <div class="flex gap-2 mb-2">
-      <input id="msg" class="flex-1 border p-3 rounded-xl" placeholder="Type message...">
+      <input id="msg" value="${currentDraft}" class="flex-1 border p-3 rounded-xl" placeholder="Type message...">
       <button id="sendBtn" type="button" class="bg-pink-500 text-white px-4 rounded-xl">Send</button>
     </div>
 
