@@ -142,8 +142,21 @@ async function uploadFile() {
   if (!file) return alert("Select a file");
 
   const fileRef = ref(storage, "uploads/" + Date.now() + "_" + file.name);
+  try {
   await uploadBytes(fileRef, file);
   const url = await getDownloadURL(fileRef);
+
+  await addDoc(collection(db, "messages"), {
+    user: currentUser,
+    text: url,
+    type: "file",
+    createdAt: Date.now()
+  });
+
+  alert("Uploaded!");
+} catch (e) {
+  alert("Upload failed: " + e.message);
+}
 
   await addDoc(collection(db, "messages"), {
     user: currentUser,
